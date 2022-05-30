@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
+using ThreeDPayment.Common;
 using ThreeDPayment.Requests;
 using ThreeDPayment.Results;
 
@@ -17,9 +18,12 @@ namespace ThreeDPayment.Providers
     {
         private readonly HttpClient client;
 
+        public EncryptionMethods Encryption { get; set; }
+
         public NestPayPaymentProvider(IHttpClientFactory httpClientFactory)
         {
             client = httpClientFactory.CreateClient();
+            Encryption = EncryptionMethods.SHA1;
         }
 
         public Task<PaymentGatewayResult> ThreeDGatewayRequest(PaymentGatewayRequest request)
@@ -75,15 +79,22 @@ namespace ThreeDPayment.Providers
                 parameters.Add("taksit", installment);//taksit sayısı | 1 veya boş tek çekim olur
 
                 var hashBuilder = new StringBuilder();
-                hashBuilder.Append(clientId);
-                hashBuilder.Append(request.OrderNumber);
-                hashBuilder.Append(totalAmount);
-                hashBuilder.Append(request.CallbackUrl);
-                hashBuilder.Append(request.CallbackUrl);
-                hashBuilder.Append(processType);
-                hashBuilder.Append(installment);
-                hashBuilder.Append(random);
-                hashBuilder.Append(storeKey);
+                if (Encryption == EncryptionMethods.SHA512)
+                {
+
+                }
+                else
+                {
+                    hashBuilder.Append(clientId + "|");
+                    hashBuilder.Append(request.OrderNumber + "|");
+                    hashBuilder.Append(totalAmount);
+                    hashBuilder.Append(request.CallbackUrl);
+                    hashBuilder.Append(request.CallbackUrl);
+                    hashBuilder.Append(processType);
+                    hashBuilder.Append(installment);
+                    hashBuilder.Append(random);
+                    hashBuilder.Append(storeKey);
+                }
 
                 var hashData = GetSHA1(hashBuilder.ToString());
                 parameters.Add("hash", hashData);//hash data
@@ -122,17 +133,24 @@ namespace ThreeDPayment.Providers
             }
 
             var hashBuilder = new StringBuilder();
-            hashBuilder.Append(request.BankParameters["clientId"]);
-            hashBuilder.Append(form["oid"].FirstOrDefault());
-            hashBuilder.Append(form["AuthCode"].FirstOrDefault());
-            hashBuilder.Append(form["ProcReturnCode"].FirstOrDefault());
-            hashBuilder.Append(form["Response"].FirstOrDefault());
-            hashBuilder.Append(form["mdStatus"].FirstOrDefault());
-            hashBuilder.Append(form["cavv"].FirstOrDefault());
-            hashBuilder.Append(form["eci"].FirstOrDefault());
-            hashBuilder.Append(form["md"].FirstOrDefault());
-            hashBuilder.Append(form["rnd"].FirstOrDefault());
-            hashBuilder.Append(request.BankParameters["storeKey"]);
+            if (Encryption == EncryptionMethods.SHA512)
+            {
+
+            }
+            else
+            {
+                hashBuilder.Append(request.BankParameters["clientId"]);
+                hashBuilder.Append(form["oid"].FirstOrDefault());
+                hashBuilder.Append(form["AuthCode"].FirstOrDefault());
+                hashBuilder.Append(form["ProcReturnCode"].FirstOrDefault());
+                hashBuilder.Append(form["Response"].FirstOrDefault());
+                hashBuilder.Append(form["mdStatus"].FirstOrDefault());
+                hashBuilder.Append(form["cavv"].FirstOrDefault());
+                hashBuilder.Append(form["eci"].FirstOrDefault());
+                hashBuilder.Append(form["md"].FirstOrDefault());
+                hashBuilder.Append(form["rnd"].FirstOrDefault());
+                hashBuilder.Append(request.BankParameters["storeKey"]);
+            }
 
             var hashData = GetSHA1(hashBuilder.ToString());
             if (!form["HASH"].Equals(hashData))
@@ -306,10 +324,18 @@ namespace ThreeDPayment.Providers
 
         private string GetSHA1(string text)
         {
-            var cryptoServiceProvider = new SHA1CryptoServiceProvider();
+            dynamic cryptoServiceProvider = null;
+            if (Encryption == EncryptionMethods.SHA512)
+            {
+                cryptoServiceProvider = new SHA512CryptoServiceProvider();
+                text = text.Replace("\\", "\\\\").Replace("|", "\\|");
+            }
+            else
+            {
+                cryptoServiceProvider = new SHA1CryptoServiceProvider();
+            }
             var inputbytes = cryptoServiceProvider.ComputeHash(Encoding.UTF8.GetBytes(text));
             var hashData = Convert.ToBase64String(inputbytes);
-
             return hashData;
         }
 
